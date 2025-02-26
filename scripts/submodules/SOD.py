@@ -473,12 +473,19 @@ class SOD:
 
         self.reid_mode = True
         self.is_tracking = False
+        print("len(detections)", len(detections))
 
         if len(detections):
             self.template = detections[0]
             self.template_kpts = detections[1]
 
+        print("self.template", self.template.shape)
+        print("self.template_kpts", self.template_kpts.shape)
+
         self.template_features = self.extract_features(self.template, self.template_kpts)
+
+        print("ALOHAWAY")
+
 
         # Store First Initial Features on Galery
         self.store_feats(self.template_features[0], self.template_features[1], torch.ones(1).to(torch.bool).cuda())
