@@ -43,7 +43,7 @@ class CameraProcessingNode:
 
         # Service to process images
         self.service = rospy.Service(
-            "set_template", SetPersonTemplate, self.handle_image_service
+            "~set_template", SetPersonTemplate, self.handle_image_service
         )
         self.srv_enable = rospy.Service("enable", SetBool, self.enable)
 

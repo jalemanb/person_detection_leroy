@@ -17,7 +17,7 @@ def call_template_image_service():
     """
     Calls the 'template_image_upload_service' service with an image loaded from disk.
     """
-    rospy.wait_for_service("template_image_upload_service")
+    rospy.wait_for_service("/robocup_tracker/set_template")
 
     try:
         # Initialize ROS node
@@ -46,7 +46,7 @@ def call_template_image_service():
 
         # Create a service proxy
         template_image_service = rospy.ServiceProxy(
-            "template_image_upload_service", SetPersonTemplate
+            "/robocup_tracker/set_template", SetPersonTemplate
         )
 
         # Call the service
