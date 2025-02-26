@@ -10,7 +10,7 @@ import numpy as np
 import cv2
 import os, time
 import torch
-from submodules.SOD import SOD
+from person_detection_robocup.submodules.SOD import SOD
 import rospkg
 
 class CameraProcessingNode:
