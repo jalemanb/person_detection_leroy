@@ -10,6 +10,7 @@ from clf_person_recognition_msgs.srv import (
     SetPersonTemplateRequest,
     SetPersonTemplateResponse,
 )
+from std_srvs.srv import SetBool, SetBoolRequest
 import numpy as np
 import cv2
 import os, time
@@ -20,6 +21,8 @@ import rospkg
 
 class CameraProcessingNode:
     def __init__(self):
+
+        self.enabled = False
 
         # Subscribing to topics
         image_sub = message_filters.Subscriber("~image", Image)
@@ -42,6 +45,7 @@ class CameraProcessingNode:
         self.service = rospy.Service(
             "set_template", SetPersonTemplate, self.handle_image_service
         )
+        self.srv_enable = rospy.Service("enable", SetBool, self.enable)
 
         # Single Person Detection model
         # Setting up Available CUDA device
@@ -82,6 +86,10 @@ class CameraProcessingNode:
 
     def callback(self, image, depth, camera_info):
         """Callback when all topics are received"""
+
+        if not self.enabled:
+            return
+
         try:
             cv_rgb = self.cv_bridge.imgmsg_to_cv2(image, "bgr8")
             cv_depth = self.cv_bridge.imgmsg_to_cv2(
@@ -211,6 +219,10 @@ class CameraProcessingNode:
 
         self.pose_pub.publish(pose_array_msg)
 
+    def enable(self, req: SetBoolRequest):
+        self.enabled = req.data
+        rospy.loginfo(f"tracking enabled: {self.enabled}")
+
     def handle_image_service(self, req):
         """Service callback to Load the Template"""
         try:
@@ -221,6 +233,7 @@ class CameraProcessingNode:
             # Dummy processing: Check if image is non-empty
             success = cv_image is not None and cv_image.size > 0
             rospy.loginfo("Service request processed, success: %s", success)
+            self.enabled = True
 
             return SetPersonTemplateResponse(success)
         except Exception as e:
