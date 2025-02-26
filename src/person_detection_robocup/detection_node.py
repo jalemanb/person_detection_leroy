@@ -5,7 +5,11 @@ import message_filters
 from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import Pose, PoseArray
 from cv_bridge import CvBridge
-from person_detection_robocup.srv import TemplateImage, TemplateImageResponse
+from clf_person_recognition_msgs.srv import (
+    SetPersonTemplate,
+    SetPersonTemplateRequest,
+    SetPersonTemplateResponse,
+)
 import numpy as np
 import cv2
 import os, time
@@ -13,14 +17,14 @@ import torch
 from person_detection_robocup.submodules.SOD import SOD
 import rospkg
 
+
 class CameraProcessingNode:
     def __init__(self):
-        rospy.init_node("camera_processing_node")
 
         # Subscribing to topics
-        image_sub = message_filters.Subscriber("/camera/camera/color/image_raw", Image)
-        depth_sub = message_filters.Subscriber("/camera/camera/aligned_depth_to_color/image_raw", Image)
-        info_sub = message_filters.Subscriber("/camera/camera/color/camera_info", CameraInfo)
+        image_sub = message_filters.Subscriber("~image", Image)
+        depth_sub = message_filters.Subscriber("~depth", Image)
+        info_sub = message_filters.Subscriber("~camera_info", CameraInfo)
 
         self.cv_bridge = CvBridge()
 
@@ -29,30 +33,38 @@ class CameraProcessingNode:
         ts.registerCallback(self.callback)
 
         # Publisher for PoseArray
-        self.pose_pub = rospy.Publisher("/detected_poses", PoseArray, queue_size=10)
+        self.pose_pub = rospy.Publisher("detected_poses", PoseArray, queue_size=10)
 
         # Publisher for debug img
-        self.debug_image_pub = rospy.Publisher("/debug_img", Image, queue_size=10)
+        self.debug_image_pub = rospy.Publisher("debug_img", Image, queue_size=10)
 
         # Service to process images
-        self.service = rospy.Service("template_image_upload_service", TemplateImage, self.handle_image_service)
-        
+        self.service = rospy.Service(
+            "set_template", SetPersonTemplate, self.handle_image_service
+        )
+
         # Single Person Detection model
         # Setting up Available CUDA device
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         rospack = rospkg.RosPack()
-        package_path = rospack.get_path('person_detection_robocup')
+        package_path = rospack.get_path("person_detection_robocup")
 
         # Setting up model paths (YOLO for object detection and segmentation, and orientation estimation model)
         # yolo_path = os.path.join(pkg_shared_dir, 'models', 'yolov8n-segpose.engine')
-        yolo_path = os.path.join(package_path, 'models', 'yolov8n-pose.engine')
-        feature_extracture_model_path = os.path.join(package_path, 'models', 'kpr_reid_shape_inferred.onnx')
-        feature_extracture_cfg_path = os.path.join(package_path, 'models', 'kpr_market_test.yaml')
+        yolo_path = os.path.join(package_path, "models", "yolov8n-pose.engine")
+        feature_extracture_model_path = os.path.join(
+            package_path, "models", "kpr_reid_shape_inferred.onnx"
+        )
+        feature_extracture_cfg_path = os.path.join(
+            package_path, "models", "kpr_market_test.yaml"
+        )
 
         # Setting up Detection Pipeline
-        self.model = SOD(yolo_path, feature_extracture_model_path, feature_extracture_cfg_path)
+        self.model = SOD(
+            yolo_path, feature_extracture_model_path, feature_extracture_cfg_path
+        )
         self.model.to(device)
-        rospy.loginfo('Deep Learning Model Armed')
+        rospy.loginfo("Deep Learning Model Armed")
 
         # Initialize the template
         # template_img_path = os.path.join(package_path, 'templates', 'temp_template.png')
@@ -60,20 +72,23 @@ class CameraProcessingNode:
         # self.model.template_update(self.template_img)
 
         # Warmup inference (GPU can be slow in the first inference)
-        self.model.detect(img_rgb = np.ones((480, 640, 3), dtype=np.uint8), img_depth = np.ones((480, 640), dtype=np.uint16))
-        rospy.loginfo('Warmup Inference Executed')
+        self.model.detect(
+            img_rgb=np.ones((480, 640, 3), dtype=np.uint8),
+            img_depth=np.ones((480, 640), dtype=np.uint16),
+        )
+        rospy.loginfo("Warmup Inference Executed")
 
         rospy.loginfo("Camera Processing Node Ready")
-        rospy.spin()
 
     def callback(self, image, depth, camera_info):
-        """ Callback when all topics are received """
+        """Callback when all topics are received"""
         try:
             cv_rgb = self.cv_bridge.imgmsg_to_cv2(image, "bgr8")
-            cv_depth = self.cv_bridge.imgmsg_to_cv2(depth, "passthrough")  # Assuming depth is float32
+            cv_depth = self.cv_bridge.imgmsg_to_cv2(
+                depth, "passthrough"
+            )  # Assuming depth is float32
 
             rospy.loginfo("Received synchronized image and depth.")
-
 
             fx = camera_info.K[0]
             fy = camera_info.K[4]
@@ -86,7 +101,7 @@ class CameraProcessingNode:
             ############################
             end_time = time.time()
             execution_time = (end_time - start_time) * 1000
-                
+
             rospy.loginfo(f"Model Inference Time: {execution_time} ms")
 
             person_poses = []
@@ -105,14 +120,23 @@ class CameraProcessingNode:
 
                 self.publish_human_pose(person_poses, camera_info.header.frame_id)
 
-            self.publish_debug_img(cv_rgb, bbox, kpts = kpts, valid_idxs = valid_idxs, confidences = conf,  tracked_ids = tracked_ids, conf = conf)
+            self.publish_debug_img(
+                cv_rgb,
+                bbox,
+                kpts=kpts,
+                valid_idxs=valid_idxs,
+                confidences=conf,
+                tracked_ids=tracked_ids,
+                conf=conf,
+            )
 
         except Exception as e:
             rospy.logerr("Error processing images: %s", str(e))
 
-
-    def publish_debug_img(self, rgb_img, boxes, kpts, valid_idxs, confidences, tracked_ids, conf = 0.5):
-        color_kpts = (255, 0, 0) 
+    def publish_debug_img(
+        self, rgb_img, boxes, kpts, valid_idxs, confidences, tracked_ids, conf=0.5
+    ):
+        color_kpts = (255, 0, 0)
         radius_kpts = 10
         thickness = 2
 
@@ -135,17 +159,35 @@ class CameraProcessingNode:
                     cv2.addWeighted(overlay, alpha, rgb_img, 1 - alpha, 0, rgb_img)
 
                 # Just for debugging
-                cv2.putText(rgb_img, f"{confidences[i]:.2f}" , (x2-10, y2-20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-                cv2.putText(rgb_img, f"ID: {tracked_ids[i]}" , (x1, y1 + int((y2-y1)/2)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
-            
+                cv2.putText(
+                    rgb_img,
+                    f"{confidences[i]:.2f}",
+                    (x2 - 10, y2 - 20),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (0, 0, 255),
+                    2,
+                )
+                cv2.putText(
+                    rgb_img,
+                    f"ID: {tracked_ids[i]}",
+                    (x1, y1 + int((y2 - y1) / 2)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (255, 0, 0),
+                    2,
+                )
+
                 kpt = kpts[i]
                 for j in range(kpt.shape[0]):
                     u = kpt[j, 0]
                     v = kpt[j, 1]
                     cv2.circle(rgb_img, (u, v), radius_kpts, color_kpts, thickness)
 
-        self.debug_image_pub.publish(self.cv_bridge.cv2_to_imgmsg(rgb_img, encoding="bgr8"))
-        
+        self.debug_image_pub.publish(
+            self.cv_bridge.cv2_to_imgmsg(rgb_img, encoding="bgr8")
+        )
+
     def publish_human_pose(self, poses, frame_id):
 
         # Publish the pose with covariance
@@ -158,19 +200,19 @@ class CameraProcessingNode:
             # Set the rotation using the composed quaternion
             pose_msg.position.x = pose[0]
             pose_msg.position.y = pose[1]
-            pose_msg.position.z = 0.
+            pose_msg.position.z = 0.0
             # Set the rotation using the composed quaternion
-            pose_msg.orientation.x = 0.
-            pose_msg.orientation.y = 0.
-            pose_msg.orientation.z = 0.
-            pose_msg.orientation.w = 1.
+            pose_msg.orientation.x = 0.0
+            pose_msg.orientation.y = 0.0
+            pose_msg.orientation.z = 0.0
+            pose_msg.orientation.w = 1.0
             # Create the pose Array
             pose_array_msg.poses.append(pose_msg)
 
         self.pose_pub.publish(pose_array_msg)
 
     def handle_image_service(self, req):
-        """ Service callback to Load the Template"""
+        """Service callback to Load the Template"""
         try:
             cv_image = self.cv_bridge.imgmsg_to_cv2(req.image, "bgr8")
 
@@ -180,10 +222,14 @@ class CameraProcessingNode:
             success = cv_image is not None and cv_image.size > 0
             rospy.loginfo("Service request processed, success: %s", success)
 
-            return TemplateImageResponse(success)
+            return SetPersonTemplateResponse(success)
         except Exception as e:
             rospy.logerr("Service processing failed: %s", str(e))
-            return TemplateImageResponse(False)
+            return SetPersonTemplateResponse(False)
+
 
 if __name__ == "__main__":
-    CameraProcessingNode()
+    rospy.init_node("robocup_tracker")
+
+    node = CameraProcessingNode()
+    rospy.spin()

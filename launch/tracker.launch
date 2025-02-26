@@ -1,0 +1,7 @@
+<launch>
+
+    <node name="robocup_tracker" pkg="person_detection_robocup" type="detection_node.py" output="screen">
+    
+    </node>
+
+</launch>
