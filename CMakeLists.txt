@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   std_msgs
   clf_person_recognition_msgs
+  people_msgs
 )
 
 catkin_python_setup()

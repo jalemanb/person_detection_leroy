@@ -18,6 +18,7 @@ import torch
 from person_detection_robocup.submodules.SOD import SOD
 import rospkg
 import threading
+from people_msgs.msg import People, Person
 
 
 class CameraProcessingNode:
@@ -35,20 +36,21 @@ class CameraProcessingNode:
         self.cv_bridge = CvBridge()
 
         # Synchronize topics
-        ts = message_filters.TimeSynchronizer([image_sub, depth_sub, info_sub], 10)
+        ts = message_filters.TimeSynchronizer([image_sub, depth_sub, info_sub], 1)
         ts.registerCallback(self.callback)
 
         # Publisher for PoseArray
-        self.pose_pub = rospy.Publisher("detected_poses", PoseArray, queue_size=10)
+        self.pose_pub = rospy.Publisher("~detected_poses", PoseArray, queue_size=10)
+        self.people_pub = rospy.Publisher("~people", People, queue_size=10)
 
         # Publisher for debug img
-        self.debug_image_pub = rospy.Publisher("debug_img", Image, queue_size=10)
+        self.debug_image_pub = rospy.Publisher("~debug_img", Image, queue_size=10)
 
         # Service to process images
         self.service = rospy.Service(
             "~set_template", SetPersonTemplate, self.handle_image_service
         )
-        self.srv_enable = rospy.Service("enable", SetBool, self.enable)
+        self.srv_enable = rospy.Service("~enable", SetBool, self.enable)
 
         # Single Person Detection model
         # Setting up Available CUDA device
@@ -131,7 +133,8 @@ class CameraProcessingNode:
 
                     person_poses = person_poses[valid_idxs]
 
-                    self.publish_human_pose(person_poses, camera_info.header.frame_id)
+                    self.publish_human_pose(person_poses, depth.header)
+                    self.publish_people(person_poses, tracked_ids, depth.header)
 
                 self.publish_debug_img(
                     cv_rgb,
@@ -201,12 +204,25 @@ class CameraProcessingNode:
             self.cv_bridge.cv2_to_imgmsg(rgb_img, encoding="bgr8")
         )
 
-    def publish_human_pose(self, poses, frame_id):
+    def publish_people(self, poses, tracked_ids, header):
+        people_msg = People()
+        people_msg.header = header
+
+        for i, pose in enumerate(poses):
+            person = Person()
+            person.name = tracked_ids[i]
+            person.position.x = pose[0]
+            person.position.y = pose[1]
+            person.position.z = 0.0
+            people_msg.people.append(person)
+
+        self.people_pub.publish(people_msg)
+
+    def publish_human_pose(self, poses, header):
 
         # Publish the pose with covariance
         pose_array_msg = PoseArray()
-        pose_array_msg.header.stamp = rospy.Time.now()
-        pose_array_msg.header.frame_id = frame_id
+        pose_array_msg.header = header
 
         for pose in poses:
             pose_msg = Pose()
