@@ -50,6 +50,7 @@ class CameraProcessingNode:
         # Single Person Detection model
         # Setting up Available CUDA device
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        rospy.loginfo(f"running on {device}")
         rospack = rospkg.RosPack()
         package_path = rospack.get_path("person_detection_robocup")
 

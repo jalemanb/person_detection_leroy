@@ -7,7 +7,7 @@
     <node name="robocup_tracker" pkg="person_detection_robocup" type="detection_node.py" output="screen">
         <remap from="~image" to="$(arg image_topic)"/>
         <remap from="~depth" to="$(arg depth_topic)"/>
-        <remap from="~camera_info" to="$(arg camera_info)"/>
+        <remap from="~camera_info" to="$(arg info_topic)"/>
     </node>
 
 </launch>
