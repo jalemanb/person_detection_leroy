@@ -14,33 +14,33 @@ from torchreid.utils.constants import *
 class KPR_onnx_wrapper:
     def __init__(self, onnx_model_path):
         models_dir = os.path.dirname(onnx_model_path)
-        ctx_onnx_path = os.path.join(models_dir, "trt_ctx.onnx")
-        trt_engines_path = os.path.join(models_dir, "trt_engines")
 
-        # if os.path.exists(ctx_onnx_path):
-        #     print(f"✅ Found TensorRT Context Model: {ctx_onnx_path}")
-        #     onnx_model_path = ctx_onnx_path  # Use the optimized ONNX context model
+        os.chdir(models_dir)
 
-        # self.providers = ["TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"]
-        # providers_options = [{
-        #             "trt_engine_cache_enable": "true",  # Enable caching
-        #             "trt_engine_cache_path": trt_engines_path,  # Path to save engines
-        #             "trt_dump_ep_context_model": "true",  # Dump ctx_onnx
-        #             "trt_ep_context_file_path": ctx_onnx_path,  # Where ctx_onnx will be saved
-        #             "trt_fp16_enable": "true",  # Enable FP16
-        #             "trt_sparsity_enable": "true",  # Enable sparsity
-        #             "trt_dla_enable": "false",  # Disable DLA (set to 1 if using NVIDIA DLA)
-        #             "trt_max_workspace_size": "4294967296",  # Set workspace size (4GB)
-        #             "trt_profile_min_shapes": "img:1x3x384x128,prompt:1x8x384x128",
-        #             "trt_profile_max_shapes": "img:20x3x384x128,prompt:20x8x384x128",
-        #             "trt_profile_opt_shapes": "img:5x3x384x128,prompt:5x8x384x128",
-        #             "trt_engine_hw_compatible": "false"
-        #         },
-        #         {},
-        #         {}]
+        self.providers = [
+            "TensorrtExecutionProvider",
+            "CUDAExecutionProvider",
+            "CPUExecutionProvider",
+        ]
+        providers_options = [
+            {
+                "trt_engine_cache_enable": "true",  # Enable caching
+                "trt_engine_cache_path": "./trt_engines",  # Path to save engines
+                "trt_fp16_enable": "true",  # Enable FP16
+                "trt_sparsity_enable": "true",  # Enable sparsity
+                "trt_dla_enable": "false",  # Disable DLA (set to 1 if using NVIDIA DLA)
+                "trt_max_workspace_size": "4294967296",  # Set workspace size (4GB)
+                "trt_profile_min_shapes": "img:1x3x384x128,prompt:1x8x384x128",
+                "trt_profile_max_shapes": "img:20x3x384x128,prompt:20x8x384x128",
+                "trt_profile_opt_shapes": "img:5x3x384x128,prompt:5x8x384x128",
+                "trt_engine_hw_compatible": "false",
+            },
+            {},
+            {},
+        ]
 
-        self.providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-        providers_options = [{}, {}]
+        # self.providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        # providers_options = [{}, {}]
 
         session_options = ort.SessionOptions()
         session_options.graph_optimization_level = (
@@ -68,6 +68,8 @@ class KPR_onnx_wrapper:
         outputs = self.model.run(
             None, {self.input_names[0]: images_input, self.input_names[1]: prompt_input}
         )
+
+        print("len(outputs)", len(outputs))
 
         for i in range(len(outputs)):
             outputs[i] = torch.Tensor(outputs[i]).cuda()
@@ -217,11 +219,7 @@ class KPR(object):
         ready_imgs = np.stack(imgs_list, axis=0)
         ready_prompts = np.stack(prompts_list, axis=0)
 
-        print("ready_imgs", ready_imgs.shape)
-        print("ready_prompts", ready_prompts.shape)
-
         output = self.model(images=ready_imgs, prompt_masks=ready_prompts)
-
         features = self.extract_test_embeddings(
             output, self.cfg.model.kpr.test_embeddings
         )

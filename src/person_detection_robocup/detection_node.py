@@ -17,12 +17,15 @@ import os, time
 import torch
 from person_detection_robocup.submodules.SOD import SOD
 import rospkg
+import threading
 
 
 class CameraProcessingNode:
     def __init__(self):
 
         self.enabled = False
+
+        self.lock = threading.Lock()
 
         # Subscribing to topics
         image_sub = message_filters.Subscriber("~image", Image)
@@ -91,56 +94,57 @@ class CameraProcessingNode:
         if not self.enabled:
             return
 
-        try:
-            cv_rgb = self.cv_bridge.imgmsg_to_cv2(image, "bgr8")
-            cv_depth = self.cv_bridge.imgmsg_to_cv2(
-                depth, "passthrough"
-            )  # Assuming depth is float32
+        with self.lock:
+            try:
+                cv_rgb = self.cv_bridge.imgmsg_to_cv2(image, "bgr8")
+                cv_depth = self.cv_bridge.imgmsg_to_cv2(
+                    depth, "passthrough"
+                )  # Assuming depth is float32
 
-            rospy.loginfo("Received synchronized image and depth.")
+                rospy.loginfo("Received synchronized image and depth.")
 
-            fx = camera_info.K[0]
-            fy = camera_info.K[4]
-            cx = camera_info.K[2]
-            cy = camera_info.K[5]
+                fx = camera_info.K[0]
+                fy = camera_info.K[4]
+                cx = camera_info.K[2]
+                cy = camera_info.K[5]
 
-            start_time = time.time()
-            ############################
-            results = self.model.detect(cv_rgb, cv_depth, [fx, fy, cx, cy])
-            ############################
-            end_time = time.time()
-            execution_time = (end_time - start_time) * 1000
+                start_time = time.time()
+                ############################
+                results = self.model.detect(cv_rgb, cv_depth, [fx, fy, cx, cy])
+                ############################
+                end_time = time.time()
+                execution_time = (end_time - start_time) * 1000
 
-            rospy.loginfo(f"Model Inference Time: {execution_time} ms")
+                rospy.loginfo(f"Model Inference Time: {execution_time} ms")
 
-            person_poses = []
-            bbox = []
-            kpts = []
-            conf = []
-            valid_idxs = []
-            tracked_ids = []
+                person_poses = []
+                bbox = []
+                kpts = []
+                conf = []
+                valid_idxs = []
+                tracked_ids = []
 
-            if results is not None:
-                self.draw_box = True
+                if results is not None:
+                    self.draw_box = True
 
-                person_poses, bbox, kpts, tracked_ids, conf, valid_idxs = results
+                    person_poses, bbox, kpts, tracked_ids, conf, valid_idxs = results
 
-                person_poses = person_poses[valid_idxs]
+                    person_poses = person_poses[valid_idxs]
 
-                self.publish_human_pose(person_poses, camera_info.header.frame_id)
+                    self.publish_human_pose(person_poses, camera_info.header.frame_id)
 
-            self.publish_debug_img(
-                cv_rgb,
-                bbox,
-                kpts=kpts,
-                valid_idxs=valid_idxs,
-                confidences=conf,
-                tracked_ids=tracked_ids,
-                conf=conf,
-            )
+                self.publish_debug_img(
+                    cv_rgb,
+                    bbox,
+                    kpts=kpts,
+                    valid_idxs=valid_idxs,
+                    confidences=conf,
+                    tracked_ids=tracked_ids,
+                    conf=conf,
+                )
 
-        except Exception as e:
-            rospy.logerr("Error processing images: %s", str(e))
+            except Exception as e:
+                rospy.logerr("Error processing images: %s", str(e))
 
     def publish_debug_img(
         self, rgb_img, boxes, kpts, valid_idxs, confidences, tracked_ids, conf=0.5
@@ -226,20 +230,24 @@ class CameraProcessingNode:
 
     def handle_image_service(self, req):
         """Service callback to Load the Template"""
-        try:
-            cv_image = self.cv_bridge.imgmsg_to_cv2(req.image, "bgr8")
+        with self.lock:
+            try:
+                cv_image = self.cv_bridge.imgmsg_to_cv2(req.image, "bgr8")
 
-            self.model.template_update(cv_image)
+                self.model.template_update(cv_image)
 
-            # Dummy processing: Check if image is non-empty
-            success = cv_image is not None and cv_image.size > 0
-            rospy.loginfo("Service request processed, success: %s", success)
-            self.enabled = True
+                # Dummy processing: Check if image is non-empty
+                success = cv_image is not None and cv_image.size > 0
+                rospy.loginfo("Service request processed, success: %s", success)
+                self.enabled = True
+                # Dummy processing: Check if image is non-empty
+                success = cv_image is not None and cv_image.size > 0
+                rospy.loginfo("Service request processed, success: %s", success)
 
-            return SetPersonTemplateResponse(success)
-        except Exception as e:
-            rospy.logerr("Service processing failed: %s", str(e))
-            return SetPersonTemplateResponse(False)
+                return SetPersonTemplateResponse(success)
+            except Exception as e:
+                rospy.logerr("Service processing failed: %s", str(e))
+                return SetPersonTemplateResponse(False)
 
 
 if __name__ == "__main__":
