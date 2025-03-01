@@ -714,21 +714,20 @@ class SOD:
         if (
             kpts.shape[0] < 2
         ):  # Not Enough Detected Keypoints proceed to compute the human pose
-            return [-100.0, -100.0, -100.0]
+            return [np.NAN, np.NAN, np.NAN]
+
+        scale = 0.001 if depth_img.dtype == np.uint16 else 1
+        cy = scale / self.fy
+        cx = scale / self.fx
 
         u = kpts[:, 0]
-
         v = kpts[:, 1]
 
-        z = (
-            depth_img[v, u] / 1000.0
-        )  # get depth for specific keypoints and convert into m
+        z = depth_img[int(v), int(u)]
+        x = z * (u - self.cx) * cx
+        y = z * (v - self.cy) * cy
 
-        x = z * (u - self.cx) / self.fx
-
-        y = -z * (v - self.cy) / self.fy
-
-        return [x.mean(), y.mean(), z.mean()]
+        return [x, y, z * scale]
 
     def yaw_to_quaternion(self, yaw):
         """
