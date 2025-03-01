@@ -39,7 +39,7 @@ class CameraProcessingNode:
         self.cv_bridge = CvBridge()
 
         # Synchronize topics
-        ts = message_filters.TimeSynchronizer([image_sub, depth_sub, info_sub], 1)
+        ts = message_filters.TimeSynchronizer([image_sub, depth_sub, info_sub], 10)
         ts.registerCallback(self.callback)
 
         # Publisher for PoseArray
@@ -96,7 +96,7 @@ class CameraProcessingNode:
     def callback(self, image, depth, camera_info):
         """Callback when all topics are received"""
 
-        rospy.loginfo("Received synchronized image and depth.")
+        rospy.logdebug("Received synchronized image and depth.")
 
         if not self.enabled:
             return
@@ -107,8 +107,6 @@ class CameraProcessingNode:
                 cv_depth = self.cv_bridge.imgmsg_to_cv2(
                     depth, "passthrough"
                 )  # Assuming depth is float32
-
-                rospy.loginfo("Received synchronized image and depth.")
 
                 fx = camera_info.K[0]
                 fy = camera_info.K[4]

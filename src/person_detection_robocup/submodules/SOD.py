@@ -316,7 +316,7 @@ class SOD:
             masked_detections_time = (
                 end_time - start_time
             ) * 1000  # Convert to milliseconds
-            print(f"masked_detections execution time: {masked_detections_time:.2f} ms")
+            # print(f"masked_detections execution time: {masked_detections_time:.2f} ms")
             total_execution_time += masked_detections_time
 
             # If no detection (No human) then stay on reid mode and return Nothing
@@ -334,7 +334,7 @@ class SOD:
 
             if self.reid_mode:  # ReId mode
 
-                print("REID MODE")
+                # print("REID MODE")
 
                 # Measure time for `feature_extraction` - Extract features to all subimages
                 start_time = time.time()
@@ -345,9 +345,9 @@ class SOD:
                 feature_extraction_time = (
                     end_time - start_time
                 ) * 1000  # Convert to milliseconds
-                print(
-                    f"feature_extraction execution time: {feature_extraction_time:.2f} ms"
-                )
+                # print(
+                #    f"feature_extraction execution time: {feature_extraction_time:.2f} ms"
+                # )
                 total_execution_time += feature_extraction_time
 
                 # Measure time for `similarity_check`
@@ -359,9 +359,9 @@ class SOD:
                 similarity_check_time = (
                     end_time - start_time
                 ) * 1000  # Convert to milliseconds
-                print(
-                    f"similarity_check execution time: {similarity_check_time:.2f} ms"
-                )
+                # print(
+                #    f"similarity_check execution time: {similarity_check_time:.2f} ms"
+                # )
                 total_execution_time += similarity_check_time
 
                 appearance_dist = appearance_dist[0]
@@ -478,7 +478,7 @@ class SOD:
                         self.reid_mode = False
 
             else:  # Tracking mode
-                print("TRACKING MODE")
+                # print("TRACKING MODE")
 
                 # Track using iou constant acceleration model or ay opencv tracker (KCF)
                 self.mean_kf, self.cov_kf = self.tracker.predict(
@@ -614,20 +614,20 @@ class SOD:
 
         self.reid_mode = True
         self.is_tracking = False
-        print("len(detections)", len(detections))
+        # print("len(detections)", len(detections))
 
         if len(detections):
             self.template = detections[0]
             self.template_kpts = detections[1]
 
-        print("self.template", self.template.shape)
-        print("self.template_kpts", self.template_kpts.shape)
+        # print("self.template", self.template.shape)
+        # print("self.template_kpts", self.template_kpts.shape)
 
         self.template_features = self.extract_features(
             self.template, self.template_kpts
         )
 
-        print("ALOHAWAY")
+        # print("ALOHAWAY")
 
         # Store First Initial Features on Galery
         self.store_feats(

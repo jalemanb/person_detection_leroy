@@ -72,7 +72,7 @@ class KPR_onnx_wrapper:
             None, {self.input_names[0]: images_input, self.input_names[1]: prompt_input}
         )
 
-        print("len(outputs)", len(outputs))
+        #print("len(outputs)", len(outputs))
 
         for i in range(len(outputs)):
             outputs[i] = torch.Tensor(outputs[i]).cuda()
