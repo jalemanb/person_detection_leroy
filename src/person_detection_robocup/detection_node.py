@@ -31,30 +31,6 @@ class CameraProcessingNode:
 
         self.lock = threading.Lock()
 
-        # Subscribing to topics
-        image_sub = message_filters.Subscriber("~image", Image)
-        depth_sub = message_filters.Subscriber("~depth", Image)
-        info_sub = message_filters.Subscriber("~camera_info", CameraInfo)
-
-        self.cv_bridge = CvBridge()
-
-        # Synchronize topics
-        ts = message_filters.TimeSynchronizer([image_sub, depth_sub, info_sub], 10)
-        ts.registerCallback(self.callback)
-
-        # Publisher for PoseArray
-        self.pose_pub = rospy.Publisher("~detected_poses", PoseArray, queue_size=10)
-        self.people_pub = rospy.Publisher("~people", People, queue_size=10)
-
-        # Publisher for debug img
-        self.debug_image_pub = rospy.Publisher("~debug_img", Image, queue_size=10)
-
-        # Service to process images
-        self.service = rospy.Service(
-            "~set_template", SetPersonTemplate, self.handle_image_service
-        )
-        self.srv_enable = rospy.Service("~enable", SetBool, self.enable)
-
         # Single Person Detection model
         # Setting up Available CUDA device
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -90,6 +66,30 @@ class CameraProcessingNode:
             img_depth=np.ones((480, 640), dtype=np.uint16),
         )
         rospy.loginfo("Warmup Inference Executed")
+
+        # Subscribing to topics
+        image_sub = message_filters.Subscriber("~image", Image)
+        depth_sub = message_filters.Subscriber("~depth", Image)
+        info_sub = message_filters.Subscriber("~camera_info", CameraInfo)
+
+        self.cv_bridge = CvBridge()
+
+        # Synchronize topics
+        ts = message_filters.TimeSynchronizer([image_sub, depth_sub, info_sub], 10)
+        ts.registerCallback(self.callback)
+
+        # Publisher for PoseArray
+        self.pose_pub = rospy.Publisher("~detected_poses", PoseArray, queue_size=10)
+        self.people_pub = rospy.Publisher("~people", People, queue_size=10)
+
+        # Publisher for debug img
+        self.debug_image_pub = rospy.Publisher("~debug_img", Image, queue_size=10)
+
+        # Service to process images
+        self.service = rospy.Service(
+            "~set_template", SetPersonTemplate, self.handle_image_service
+        )
+        self.srv_enable = rospy.Service("~enable", SetBool, self.enable)
 
         rospy.loginfo("Camera Processing Node Ready")
 
@@ -162,7 +162,7 @@ class CameraProcessingNode:
         radius_kpts = 10
         thickness = 2
 
-        print("confidences", confidences)
+        # print("confidences", confidences)
 
         if len(boxes) > 0 and len(kpts) > 0:
 
@@ -224,7 +224,7 @@ class CameraProcessingNode:
             person.name = "tracked"
             person.position.x = pose[0]
             person.position.y = pose[1]
-            person.position.z = 0.0
+            person.position.z = pose[2]
             people_msg.people.append(person)
 
         self.people_pub.publish(people_msg)
@@ -242,7 +242,7 @@ class CameraProcessingNode:
             # Set the rotation using the composed quaternion
             pose_msg.position.x = pose[0]
             pose_msg.position.y = pose[1]
-            pose_msg.position.z = 0.0
+            pose_msg.position.z = pose[2]
             # Set the rotation using the composed quaternion
             pose_msg.orientation.x = 0.0
             pose_msg.orientation.y = 0.0

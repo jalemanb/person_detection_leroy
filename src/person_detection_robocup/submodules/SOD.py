@@ -723,11 +723,13 @@ class SOD:
         u = kpts[:, 0]
         v = kpts[:, 1]
 
-        z = depth_img[int(v), int(u)]
+        z = depth_img[v, u]
         x = z * (u - self.cx) * cx
         y = z * (v - self.cy) * cy
 
-        return [x, y, z * scale]
+        #print(f"{x}, {y}, {z}")
+
+        return [x.mean(), y.mean(), z.mean() * scale]
 
     def yaw_to_quaternion(self, yaw):
         """

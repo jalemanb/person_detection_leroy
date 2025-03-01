@@ -22,14 +22,13 @@ def call_template_image_service():
     try:
         # Initialize ROS node
         rospy.init_node("template_image_client_node")
-        print("holla")
 
         # Get the package path
         rospack = rospkg.RosPack()
         package_path = rospack.get_path("person_detection_robocup")
 
         # Construct the image path
-        template_img_path = os.path.join(package_path, "templates", "temp_template.png")
+        template_img_path = os.path.join(package_path, "templates", "dude.png")
 
         # Load the image using OpenCV
         image = cv2.imread(template_img_path, cv2.IMREAD_COLOR)
