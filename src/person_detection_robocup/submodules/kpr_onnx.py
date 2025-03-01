@@ -16,6 +16,7 @@ class KPR_onnx_wrapper:
         models_dir = os.path.dirname(onnx_model_path)
 
         os.chdir(models_dir)
+        print("Loading ONNX Models...")
 
         self.providers = [
             "TensorrtExecutionProvider",
@@ -29,11 +30,11 @@ class KPR_onnx_wrapper:
                 "trt_fp16_enable": "true",  # Enable FP16
                 "trt_sparsity_enable": "true",  # Enable sparsity
                 "trt_dla_enable": "false",  # Disable DLA (set to 1 if using NVIDIA DLA)
-                "trt_max_workspace_size": "4294967296",  # Set workspace size (4GB)
+                "trt_max_workspace_size": "16294967296",  # Set workspace size (16GB)
                 "trt_profile_min_shapes": "img:1x3x384x128,prompt:1x8x384x128",
                 "trt_profile_max_shapes": "img:20x3x384x128,prompt:20x8x384x128",
                 "trt_profile_opt_shapes": "img:5x3x384x128,prompt:5x8x384x128",
-                "trt_engine_hw_compatible": "false",
+                # "trt_engine_hw_compatible": "false",
             },
             {},
             {},
@@ -59,6 +60,8 @@ class KPR_onnx_wrapper:
 
         self.output_names = [inp.name for inp in self.model.get_outputs()]
         print("ONNX Model Outputs:", self.output_names)
+
+        print("ONNX Model Loaded")
 
     def __call__(self, images, prompt_masks):
 

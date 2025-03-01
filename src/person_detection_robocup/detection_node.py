@@ -25,6 +25,9 @@ class CameraProcessingNode:
     def __init__(self):
 
         self.enabled = False
+        self.enable_debug = True
+        self.enable_people = True
+        self.enable_poses = True
 
         self.lock = threading.Lock()
 
@@ -93,6 +96,8 @@ class CameraProcessingNode:
     def callback(self, image, depth, camera_info):
         """Callback when all topics are received"""
 
+        rospy.loginfo("Received synchronized image and depth.")
+
         if not self.enabled:
             return
 
@@ -152,6 +157,9 @@ class CameraProcessingNode:
     def publish_debug_img(
         self, rgb_img, boxes, kpts, valid_idxs, confidences, tracked_ids, conf=0.5
     ):
+        if not self.enable_debug:
+            return
+
         color_kpts = (255, 0, 0)
         radius_kpts = 10
         thickness = 2
@@ -205,12 +213,17 @@ class CameraProcessingNode:
         )
 
     def publish_people(self, poses, tracked_ids, header):
+        if not self.enable_people:
+            return
+
         people_msg = People()
         people_msg.header = header
 
         for i, pose in enumerate(poses):
+            if not tracked_ids == 2222:
+                continue
             person = Person()
-            person.name = tracked_ids[i]
+            person.name = "tracked"
             person.position.x = pose[0]
             person.position.y = pose[1]
             person.position.z = 0.0
@@ -219,6 +232,8 @@ class CameraProcessingNode:
         self.people_pub.publish(people_msg)
 
     def publish_human_pose(self, poses, header):
+        if not self.enable_poses:
+            return
 
         # Publish the pose with covariance
         pose_array_msg = PoseArray()
