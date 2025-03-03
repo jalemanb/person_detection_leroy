@@ -21,14 +21,15 @@ class CameraProcessingNode:
         self.lock = threading.Lock()
 
         # Subscribing to topics
-        image_sub = message_filters.Subscriber("/camera/camera/color/image_raw", Image)
-        depth_sub = message_filters.Subscriber("/camera/camera/aligned_depth_to_color/image_raw", Image)
-        info_sub = message_filters.Subscriber("/camera/camera/color/camera_info", CameraInfo)
+        image_sub = message_filters.Subscriber("/camera/color/image_raw", Image)
+        depth_sub = message_filters.Subscriber("/camera/aligned_depth_to_color/image_raw", Image)
+        info_sub = message_filters.Subscriber("/camera/aligned_depth_to_color/camera_info", CameraInfo)
 
         self.cv_bridge = CvBridge()
 
         # Synchronize topics
         ts = message_filters.TimeSynchronizer([image_sub, depth_sub, info_sub], 10)
+
         ts.registerCallback(self.callback)
 
         # Publisher for PoseArray
@@ -70,11 +71,16 @@ class CameraProcessingNode:
         rospy.spin()
 
     def callback(self, image, depth, camera_info):
+
         """ Callback when all topics are received """
         with self.lock:
             try:
                 cv_rgb = self.cv_bridge.imgmsg_to_cv2(image, "bgr8")
                 cv_depth = self.cv_bridge.imgmsg_to_cv2(depth, "passthrough")  # Assuming depth is float32
+
+                # Create a single-channel depth image with zeros (default depth is set to 0)
+                # height, width = cv_rgb.shape[:2]
+                # cv_depth = np.ones((height, width), dtype=np.float32)  # Sha
 
                 rospy.loginfo("Received synchronized image and depth.")
 
@@ -162,7 +168,7 @@ class CameraProcessingNode:
             # Set the rotation using the composed quaternion
             pose_msg.position.x = pose[0]
             pose_msg.position.y = pose[1]
-            pose_msg.position.z = 0.
+            pose_msg.position.z = pose[2]
             # Set the rotation using the composed quaternion
             pose_msg.orientation.x = 0.
             pose_msg.orientation.y = 0.

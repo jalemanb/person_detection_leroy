@@ -36,7 +36,7 @@ class SOD:
         self.cov_kf = None
         self.border_thr = 10
 
-        self.reid_thr = 0.8
+        self.reid_thr = 1.0
 
         # Incremental KNN Utils #########################
         self.max_samples = 100
@@ -121,7 +121,7 @@ class SOD:
         labels_A = self.gallery_labels[:self.samples_num]
         B = feats
         visibility_B = feats_vis
-        k = int(np.minimum(self.samples_num, np.sqrt(self.max_samples)))
+        k = int(np.minimum(torch.sum(labels_A).item(), np.sqrt(self.max_samples)))
 
         N, parts, dim = A.shape
         batch = B.shape[0]
@@ -246,6 +246,8 @@ class SOD:
             # YOLO Detection Results
             detections_imgs, detection_kpts, bboxes, person_kpts, poses, track_ids = detections
 
+            batch_size = detections_imgs.shape[0]
+
             # Up to This Point There are Only Yolo Detections #####################################
 
             if self.reid_mode: # ReId mode
@@ -272,7 +274,9 @@ class SOD:
 
                 similarity = appearance_dist.tolist()
 
-                classification = self.iknn(detections_features[0], detections_features[1])
+                classification = self.iknn(detections_features[0], detections_features[1], threshold=0.9)
+                # print("visibilities", detections_features[1])
+                # print("classification", classification)
 
                 if self.is_tracking:
 
@@ -289,6 +293,11 @@ class SOD:
                     appearance_dist = np.array(appearance_dist)
                     appearance_gate = appearance_dist < self.reid_thr
 
+                    # print("knn_gate", knn_gate)
+                    # print("mb_gate", mb_gate)
+                    # print("mb_dist", mb_dist)
+                    # print("appearance_dist", appearance_dist)
+
                     gate = knn_gate*mb_gate
 
                     # Get All indices belonging to valid Detections
@@ -296,14 +305,26 @@ class SOD:
 
                     if np.sum(gate) == 1:
                         self.mean_kf, self.cov_kf = self.tracker.update(self.mean_kf, self.cov_kf, bbox_to_xyah(bboxes)[best_idx[0]])
+
+                        # Start Storring features if they are enough
+                        # bool_tensor = torch.ones(1, dtype=torch.bool, device="cuda")
+                        # self.store_feats(detections_features[0][best_idx], detections_features[1][best_idx], bool_tensor)
+                        bool_tensor = torch.zeros(batch_size, dtype=torch.bool, device="cuda")
+                        bool_tensor[best_idx] = True
+                        self.store_feats(detections_features[0], detections_features[1], bool_tensor)
+
+                    # elif np.sum(gate) == 0:
+                    #     self.is_tracking = False
                         
                 else:
                     # knn_gate = (torch.sum(classification, dim=0) >= 5).cpu().numpy()
-                    knn_gate = (torch.sum(classification & detections_features[1].T, dim=0) >= torch.sum(detections_features[1].T, dim=0)).cpu().numpy()
+                    knn_gate = (torch.sum(classification & detections_features[1].T, dim=0) >= torch.sum(detections_features[1].T, dim=0) - 1).cpu().numpy()
 
                     appearance_dist = np.array(appearance_dist)
                     appearance_gate = appearance_dist < self.reid_thr
                     gate = knn_gate
+                    print("knn_gate", knn_gate)
+                    print("appearance_dist", appearance_dist)
 
                     # Get All indices belonging to valid Detections
                     best_idx = np.argwhere(gate == 1).flatten().tolist()
@@ -327,19 +348,26 @@ class SOD:
                 
                 # If there is only valid detection 
                 if np.sum(gate) == 1 and not self.is_tracking: 
-                    # Extra conditions
+
                     best_match_idx = best_idx[0]
                     target_bbox = bboxes[best_match_idx]
+                    self.mean_kf, self.cov_kf = self.tracker.initiate(bbox_to_xyah(target_bbox)[0])
+                    self.is_tracking = True
+                    self.reid_mode = False
 
-                    # Check the bounding boxes are well separated amoung each other (distractor boxes from the target box)
-                    distractor_bbox = np.delete(bboxes, best_match_idx, axis=0)
-                    ious_to_target = iou_vectorized(target_bbox,  distractor_bbox)
+                    # # Extra conditions
+                    # best_match_idx = best_idx[0]
+                    # target_bbox = bboxes[best_match_idx]
 
-                    # Check the target Box is  far from the edge of the image (left or right)
-                    if not np.any(ious_to_target > 0):
-                        self.mean_kf, self.cov_kf = self.tracker.initiate(bbox_to_xyah(target_bbox)[0])
-                        self.is_tracking = True
-                        self.reid_mode = False
+                    # # Check the bounding boxes are well separated amoung each other (distractor boxes from the target box)
+                    # distractor_bbox = np.delete(bboxes, best_match_idx, axis=0)
+                    # ious_to_target = iou_vectorized(target_bbox,  distractor_bbox)
+
+                    # # Check the target Box is  far from the edge of the image (left or right)
+                    # if not np.any(ious_to_target > 0):
+                    #     self.mean_kf, self.cov_kf = self.tracker.initiate(bbox_to_xyah(target_bbox)[0])
+                    #     self.is_tracking = True
+                    #     self.reid_mode = False
             
                 # If there is just one valid and there is a track
                 elif np.sum(gate) == 1 and self.is_tracking: 

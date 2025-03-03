@@ -185,7 +185,7 @@ class KPR(object):
             return f_, v_, ready_prompts
         
 
-        return f_, v_.to(torch.bool)
+        return f_, (v_ > 0.3)
 
     def compare(self, fq, fg, vq, vg): 
         # Comparing Query Feature (Target Person) against Gallery features (Detected People)
