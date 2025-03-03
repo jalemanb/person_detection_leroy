@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import traceback
 
 import rospy
 import message_filters
@@ -115,12 +116,14 @@ class CameraProcessingNode:
 
                 start_time = time.time()
                 ############################
+                rospy.loginfo(f"Running Model...")
                 results = self.model.detect(cv_rgb, cv_depth, [fx, fy, cx, cy])
                 ############################
                 end_time = time.time()
                 execution_time = (end_time - start_time) * 1000
 
-                rospy.loginfo(f"Model Inference Time: {execution_time} ms")
+                rospy.loginfo(f"Model Inference Time: {execution_time}ms")
+                # rospy.loginfo(f"{results}")
 
                 person_poses = []
                 bbox = []
@@ -130,7 +133,6 @@ class CameraProcessingNode:
                 tracked_ids = []
 
                 if results is not None:
-                    self.draw_box = True
 
                     person_poses, bbox, kpts, tracked_ids, conf, valid_idxs = results
 
@@ -150,7 +152,8 @@ class CameraProcessingNode:
                 )
 
             except Exception as e:
-                rospy.logerr("Error processing images: %s", str(e))
+                rospy.logerr(f"Error processing images: {e}")
+                rospy.logwarn(f"{traceback.format_exc()}")
 
     def publish_debug_img(
         self, rgb_img, boxes, kpts, valid_idxs, confidences, tracked_ids, conf=0.5
@@ -218,7 +221,7 @@ class CameraProcessingNode:
         people_msg.header = header
 
         for i, pose in enumerate(poses):
-            if not tracked_ids == 2222:
+            if not tracked_ids[i] == 2222:
                 continue
             person = Person()
             person.name = "tracked"

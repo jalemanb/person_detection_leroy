@@ -1,3 +1,9 @@
+import logging
+
+from ultralytics import settings
+
+settings.ONLINE = False
+
 from ultralytics import YOLO
 import torch.nn.functional as F
 import torch, cv2
@@ -24,6 +30,11 @@ class SOD:
         feature_extracture_cfg_path,
         tracker_system_path="",
     ) -> None:
+
+        self.logger = logging.getLogger("SOD")
+        self.logger.setLevel(logging.DEBUG)
+        console_handler = logging.StreamHandler()
+        self.logger.addHandler(console_handler)
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -68,7 +79,7 @@ class SOD:
         self.samples_num = 0
         #################################################
 
-        print("Tracker Armed")
+        self.logger.info("Tracker Armed")
 
         self.reid_mode = True
         self.is_tracking = False
@@ -230,6 +241,7 @@ class SOD:
             track=track,
             detection_thr=detection_thr,
         )
+        # self.logger.info(f"LEN yolox detections: {len(results[0].boxes)}, kps: {len(results[0].keypoints)}")
 
         if not (len(results[0].boxes) > 0):
             return []
@@ -298,7 +310,7 @@ class SOD:
 
             # If there is not template initialization then dont return anything
             if self.template is None:
-                print("No template provided")
+                self.logger.warning("No template provided")
                 return None
 
             total_execution_time = 0  # To accumulate total time
@@ -319,6 +331,7 @@ class SOD:
             # print(f"masked_detections execution time: {masked_detections_time:.2f} ms")
             total_execution_time += masked_detections_time
 
+            self.logger.debug(f"DETECTIONS: {len(detections)}")
             # If no detection (No human) then stay on reid mode and return Nothing
             if not (len(detections) > 0):
                 self.reid_mode = True
@@ -330,11 +343,13 @@ class SOD:
                 detections
             )
 
+            self.logger.debug(f"DETECTIONS bboxes: {len(bboxes)}")
+
             # Up to This Point There are Only Yolo Detections #####################################
 
             if self.reid_mode:  # ReId mode
 
-                # print("REID MODE")
+                self.logger.debug("REID MODE")
 
                 # Measure time for `feature_extraction` - Extract features to all subimages
                 start_time = time.time()
@@ -345,7 +360,7 @@ class SOD:
                 feature_extraction_time = (
                     end_time - start_time
                 ) * 1000  # Convert to milliseconds
-                # print(
+                # self.logger.debug(
                 #    f"feature_extraction execution time: {feature_extraction_time:.2f} ms"
                 # )
                 total_execution_time += feature_extraction_time
@@ -359,7 +374,7 @@ class SOD:
                 similarity_check_time = (
                     end_time - start_time
                 ) * 1000  # Convert to milliseconds
-                # print(
+                # self.logger.debug(
                 #    f"similarity_check execution time: {similarity_check_time:.2f} ms"
                 # )
                 total_execution_time += similarity_check_time
@@ -371,7 +386,7 @@ class SOD:
                 classification = self.iknn(
                     detections_features[0], detections_features[1]
                 )
-
+                self.logger.debug(f"self.is_tracking:  {self.is_tracking}")
                 if self.is_tracking:
 
                     self.mean_kf, self.cov_kf = self.tracker.predict(
@@ -438,11 +453,17 @@ class SOD:
                     # if tracked box is out of FOV then stop tracking and rely purely on visual appearance
                     if tracked_bbox[2] < 0 or tracked_bbox[0] > img_w:
                         self.is_tracking = False
+                    self.logger.debug(
+                        f"RETURN none: [not np.sum(gate) and self.is_tracking] BBOX: {tracked_bbox}"
+                    )
                     return None
 
                 # If there are no valid detection and no box is being tracked
                 elif not np.sum(gate) and not self.is_tracking:
                     self.reid_mode = True
+                    self.logger.debug(
+                        f"RETURN none: [not np.sum(gate) and not self.is_tracking]"
+                    )
                     return None
 
                 # If there is only valid detection
@@ -478,7 +499,7 @@ class SOD:
                         self.reid_mode = False
 
             else:  # Tracking mode
-                # print("TRACKING MODE")
+                self.logger.debug("TRACKING MODE")
 
                 # Track using iou constant acceleration model or ay opencv tracker (KCF)
                 self.mean_kf, self.cov_kf = self.tracker.predict(
@@ -502,6 +523,7 @@ class SOD:
                 if mb_dist[best_match_idx] > chi2inv95[4]:
                     self.reid_mode = True
                     # self.is_tracking = False
+                    self.logger.debug(f"mb_dist[best_match_idx] > chi2inv95[4]")
                     return None
 
                 self.mean_kf, self.cov_kf = self.tracker.update(
@@ -588,7 +610,9 @@ class SOD:
 
         return dist, part_dist
 
-    def detect_mot(self, img, detection_class, track=False, detection_thr=0.5):
+    def detect_mot(
+        self, img, detection_class, track=False, detection_thr=0.5, verbose=False
+    ):
         # Run multiple object detection with a given desired class
         if track:
             return self.yolo.track(
@@ -598,9 +622,15 @@ class SOD:
                 tracker=self.tracker_file,
                 iou=0.2,
                 conf=detection_thr,
+                verbose=verbose,
             )
         else:
-            return self.yolo(img, classes=detection_class, conf=detection_thr)
+            return self.yolo(
+                img,
+                classes=detection_class,
+                conf=detection_thr,
+                verbose=verbose,
+            )
 
     def template_update(self, template):
 
@@ -614,20 +644,20 @@ class SOD:
 
         self.reid_mode = True
         self.is_tracking = False
-        # print("len(detections)", len(detections))
+        # self.logger.debug("len(detections)", len(detections))
 
         if len(detections):
             self.template = detections[0]
             self.template_kpts = detections[1]
 
-        # print("self.template", self.template.shape)
-        # print("self.template_kpts", self.template_kpts.shape)
+        # self.logger.debug("self.template", self.template.shape)
+        # self.logger.debug("self.template_kpts", self.template_kpts.shape)
 
         self.template_features = self.extract_features(
             self.template, self.template_kpts
         )
 
-        # print("ALOHAWAY")
+        # self.logger.debug("ALOHAWAY")
 
         # Store First Initial Features on Galery
         self.store_feats(
@@ -714,7 +744,7 @@ class SOD:
         if (
             kpts.shape[0] < 2
         ):  # Not Enough Detected Keypoints proceed to compute the human pose
-            return [np.NAN, np.NAN, np.NAN]
+            return [0, 0, 0]
 
         scale = 0.001 if depth_img.dtype == np.uint16 else 1
         cy = scale / self.fy
@@ -726,8 +756,6 @@ class SOD:
         z = depth_img[v, u]
         x = z * (u - self.cx) * cx
         y = z * (v - self.cy) * cy
-
-        #print(f"{x}, {y}, {z}")
 
         return [x.mean(), y.mean(), z.mean() * scale]
 
