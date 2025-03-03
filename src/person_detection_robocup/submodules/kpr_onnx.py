@@ -72,7 +72,7 @@ class KPR_onnx_wrapper:
             None, {self.input_names[0]: images_input, self.input_names[1]: prompt_input}
         )
 
-        #print("len(outputs)", len(outputs))
+        # print("len(outputs)", len(outputs))
 
         for i in range(len(outputs)):
             outputs[i] = torch.Tensor(outputs[i]).cuda()
@@ -245,7 +245,7 @@ class KPR(object):
         if return_heatmaps:
             return f_, v_, ready_prompts
 
-        return f_, v_.to(torch.bool)
+        return f_, (v_ > 0.3)
 
     def compare(self, fq, fg, vq, vg):
         # Comparing Query Feature (Target Person) against Gallery features (Detected People)

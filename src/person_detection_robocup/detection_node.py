@@ -51,7 +51,10 @@ class CameraProcessingNode:
 
         # Setting up Detection Pipeline
         self.model = SOD(
-            yolo_path, feature_extracture_model_path, feature_extracture_cfg_path
+            yolo_path,
+            feature_extracture_model_path,
+            feature_extracture_cfg_path,
+            logger_level=20,
         )
         self.model.to(device)
         rospy.loginfo("Deep Learning Model Armed")
@@ -116,13 +119,13 @@ class CameraProcessingNode:
 
                 start_time = time.time()
                 ############################
-                rospy.loginfo(f"Running Model...")
+                rospy.logdebug(f"Running Model...")
                 results = self.model.detect(cv_rgb, cv_depth, [fx, fy, cx, cy])
                 ############################
                 end_time = time.time()
                 execution_time = (end_time - start_time) * 1000
 
-                rospy.loginfo(f"Model Inference Time: {execution_time}ms")
+                rospy.logdebug(f"Model Inference Time: {execution_time}ms")
                 # rospy.loginfo(f"{results}")
 
                 person_poses = []
