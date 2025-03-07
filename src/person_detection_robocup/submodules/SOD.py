@@ -76,10 +76,15 @@ class SOD:
 
         # Incremental KNN Utils #########################
         self.max_samples = 100
-        self.gallery_feats = torch.zeros((self.max_samples, 6, 512)).cuda()
-        self.gallery_vis = torch.zeros((self.max_samples, 6)).to(torch.bool).cuda()
-        self.gallery_labels = torch.zeros((self.max_samples)).to(torch.bool).cuda()
-        self.samples_num = 0
+        self.gallery_feats_pos = torch.zeros((self.max_samples, 6, 512)).cuda()
+        self.gallery_vis_pos = torch.zeros((self.max_samples, 6)).to(torch.bool).cuda()
+        self.gallery_labels_pos = torch.zeros((self.max_samples)).to(torch.bool).cuda()
+        self.samples_num_pos = 0
+
+        self.gallery_feats_neg = torch.zeros((self.max_samples, 6, 512)).cuda()
+        self.gallery_vis_neg = torch.zeros((self.max_samples, 6)).to(torch.bool).cuda()
+        self.gallery_labels_neg = torch.zeros((self.max_samples)).to(torch.bool).cuda()
+        self.samples_num_neg = 0
         #################################################
 
         self.logger.info("Tracker Armed")
@@ -90,7 +95,28 @@ class SOD:
     def to(self, device):
         self.device = device
 
+
     def store_feats(self, feats, vis, label):
+    
+        # Get indices for positive and negative labels
+        pos_mask = label  # Already boolean
+        neg_mask = ~label  # Invert boolean values
+
+        # Split tensors based on labels
+        feats_pos, vis_pos, label_pos = feats[pos_mask], vis[pos_mask], label[pos_mask]
+        feats_neg, vis_neg, label_neg = feats[neg_mask], vis[neg_mask], label[neg_mask]
+
+        # Check if negative tensors exist
+        has_negative = feats_neg.shape[0] > 0
+
+        self.memory_manager(feats_pos, vis_pos, label_pos, True)
+
+        if has_negative:
+            self.memory_manager(feats_neg, vis_neg, label_neg, False)
+
+
+
+    def memory_manager(self, feats, vis, label, pos):
         """
         Stores feature vectors, visibility masks, and labels into a fixed-size buffer.
         Uses `torch.roll` to implement a circular buffer. If the batch size is larger than `max_samples`,
@@ -101,48 +127,70 @@ class SOD:
             vis (torch.Tensor): Visibility tensor of shape [batch, 6] (bool)
             label (torch.Tensor): Labels tensor of shape [batch] (bool)
         """
-        new_feats_num = feats.shape[0]
 
-        # If batch is larger than max_samples, keep only the most recent samples
-        if new_feats_num > self.max_samples:
-            feats = feats[-self.max_samples :]  # Keep only last `max_samples` samples
-            vis = vis[-self.max_samples :]
-            label = label[-self.max_samples :]
-            new_feats_num = self.max_samples  # Adjust count
+        if pos:
+            new_feats_num = feats.shape[0]
 
-        if self.samples_num < self.max_samples:
-            # Append new samples normally
-            available_space = self.max_samples - self.samples_num
-            num_to_store = min(new_feats_num, available_space)
+            # If batch is larger than max_samples, keep only the most recent samples
+            if new_feats_num > self.max_samples:
+                feats = feats[-self.max_samples:]  # Keep only last `max_samples` samples
+                vis = vis[-self.max_samples:]
+                label = label[-self.max_samples:]
+                new_feats_num = self.max_samples  # Adjust count
 
-            self.gallery_feats[self.samples_num : self.samples_num + num_to_store] = (
-                feats[:num_to_store]
-            )
-            self.gallery_vis[self.samples_num : self.samples_num + num_to_store] = vis[
-                :num_to_store
-            ]
-            self.gallery_labels[self.samples_num : self.samples_num + num_to_store] = (
-                label[:num_to_store]
-            )
+            if self.samples_num_pos < self.max_samples:
+                # Append new samples normally
+                available_space = self.max_samples - self.samples_num_pos
+                num_to_store = min(new_feats_num, available_space)
 
-            self.samples_num += num_to_store
+                self.gallery_feats_pos[self.samples_num_pos:self.samples_num_pos + num_to_store] = feats[:num_to_store]
+                self.gallery_vis_pos[self.samples_num_pos:self.samples_num_pos + num_to_store] = vis[:num_to_store]
+                self.gallery_labels_pos[self.samples_num_pos:self.samples_num_pos + num_to_store] = label[:num_to_store]
 
+                self.samples_num_pos += num_to_store
+
+            else:
+                # Use torch.roll to shift old data and insert new samples at the beginning
+                self.gallery_feats_pos = torch.roll(self.gallery_feats_pos, shifts=-new_feats_num, dims=0)
+                self.gallery_vis_pos = torch.roll(self.gallery_vis_pos, shifts=-new_feats_num, dims=0)
+                self.gallery_labels_pos = torch.roll(self.gallery_labels_pos, shifts=-new_feats_num, dims=0)
+
+                # Overwrite the first `new_feats_num` positions with new data
+                self.gallery_feats_pos[-new_feats_num:] = feats
+                self.gallery_vis_pos[-new_feats_num:] = vis
+                self.gallery_labels_pos[-new_feats_num:] = label
         else:
-            # Use torch.roll to shift old data and insert new samples at the beginning
-            self.gallery_feats = torch.roll(
-                self.gallery_feats, shifts=-new_feats_num, dims=0
-            )
-            self.gallery_vis = torch.roll(
-                self.gallery_vis, shifts=-new_feats_num, dims=0
-            )
-            self.gallery_labels = torch.roll(
-                self.gallery_labels, shifts=-new_feats_num, dims=0
-            )
+            new_feats_num = feats.shape[0]
 
-            # Overwrite the first `new_feats_num` positions with new data
-            self.gallery_feats[-new_feats_num:] = feats
-            self.gallery_vis[-new_feats_num:] = vis
-            self.gallery_labels[-new_feats_num:] = label
+            # If batch is larger than max_samples, keep only the most recent samples
+            if new_feats_num > self.max_samples:
+                feats = feats[-self.max_samples:]  # Keep only last `max_samples` samples
+                vis = vis[-self.max_samples:]
+                label = label[-self.max_samples:]
+                new_feats_num = self.max_samples  # Adjust count
+
+            if self.samples_num_neg < self.max_samples:
+                # Append new samples normally
+                available_space = self.max_samples - self.samples_num_neg
+                num_to_store = min(new_feats_num, available_space)
+
+                self.gallery_feats_neg[self.samples_num_neg:self.samples_num_neg + num_to_store] = feats[:num_to_store]
+                self.gallery_vis_neg[self.samples_num_neg:self.samples_num_neg + num_to_store] = vis[:num_to_store]
+                self.gallery_labels_neg[self.samples_num_neg:self.samples_num_neg + num_to_store] = label[:num_to_store]
+
+                self.samples_num_neg += num_to_store
+
+            else:
+                # Use torch.roll to shift old data and insert new samples at the beginning
+                self.gallery_feats_neg = torch.roll(self.gallery_feats_neg, shifts=-new_feats_num, dims=0)
+                self.gallery_vis_neg = torch.roll(self.gallery_vis_neg, shifts=-new_feats_num, dims=0)
+                self.gallery_labels_neg = torch.roll(self.gallery_labels_neg, shifts=-new_feats_num, dims=0)
+
+                # Overwrite the first `new_feats_num` positions with new data
+                self.gallery_feats_neg[-new_feats_num:] = feats
+                self.gallery_vis_neg[-new_feats_num:] = vis
+                self.gallery_labels_neg[-new_feats_num:] = label
+
 
     def iknn(self, feats, feats_vis, metric="euclidean", threshold=0.8):
         """
@@ -164,9 +212,9 @@ class SOD:
             binary_mask (torch.Tensor): Binary mask of shape [k, batch, 6] indicating which top-k distances are within threshold
         """
 
-        A = self.gallery_feats[: self.samples_num]
-        visibility_A = self.gallery_vis[: self.samples_num]
-        labels_A = self.gallery_labels[: self.samples_num]
+        A = torch.cat([self.gallery_feats_pos[:self.samples_num_pos], self.gallery_feats_neg[:self.samples_num_neg]], dim = 0)
+        visibility_A = torch.cat([self.gallery_vis_pos[:self.samples_num_pos], self.gallery_vis_neg[:self.samples_num_neg]], dim = 0)
+        labels_A = torch.cat([self.gallery_labels_pos[:self.samples_num_pos], self.gallery_labels_neg[:self.samples_num_neg]])
         B = feats
         visibility_B = feats_vis
         k = int(np.minimum(torch.sum(labels_A).item(), np.sqrt(self.max_samples)))
@@ -308,6 +356,8 @@ class SOD:
         img_w = img_rgb.shape[1]
 
         self.fx, self.fy, self.cx, self.cy = camera_params
+        
+        # print("Positive Samples:", self.samples_num_pos, "Negative Samples:", self.samples_num_neg)
 
         with torch.no_grad():
 
@@ -644,10 +694,10 @@ class SOD:
         detections = self.masked_detections(template, track=False, detection_thr=0.8)
 
         # Restart the Tracking States (Gallery & Tracking Stage)
-        self.gallery_feats = torch.zeros((self.max_samples, 6, 512)).cuda()
-        self.gallery_vis = torch.zeros((self.max_samples, 6)).to(torch.bool).cuda()
-        self.gallery_labels = torch.zeros((self.max_samples)).to(torch.bool).cuda()
-        self.samples_num = 0
+        self.gallery_feats_pos = self.gallery_feats_neg = torch.zeros((self.max_samples, 6, 512)).cuda()
+        self.gallery_vis_pos = self.gallery_vis_neg = torch.zeros((self.max_samples, 6)).to(torch.bool).cuda()
+        self.gallery_labels_pos = self.gallery_labels_neg = torch.zeros((self.max_samples)).to(torch.bool).cuda()
+        self.samples_num_pos = self.samples_num_neg = 0
 
         self.reid_mode = True
         self.is_tracking = False
