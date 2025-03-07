@@ -649,13 +649,13 @@ class SOD:
         self.gallery_labels = torch.zeros((self.max_samples)).to(torch.bool).cuda()
         self.samples_num = 0
 
-        self.reid_mode = True
-        self.is_tracking = False
         # self.logger.debug("len(detections)", len(detections))
 
         if len(detections):
             self.template = detections[0]
             self.template_kpts = detections[1]
+        else:
+            return False
 
         # self.logger.debug("self.template", self.template.shape)
         # self.logger.debug("self.template_kpts", self.template_kpts.shape)
@@ -672,6 +672,10 @@ class SOD:
             self.template_features[1],
             torch.ones(1).to(torch.bool).cuda(),
         )
+
+        self.reid_mode = True
+        self.is_tracking = False
+        return True
 
     def feature_extraction(self, detections_imgs, detection_kpts):
         # Extract features for similarity check

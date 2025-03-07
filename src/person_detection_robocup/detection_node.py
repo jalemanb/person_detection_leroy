@@ -269,16 +269,15 @@ class CameraProcessingNode:
             try:
                 cv_image = self.cv_bridge.imgmsg_to_cv2(req.image, "bgr8")
 
-                self.model.template_update(cv_image)
-
-                # Dummy processing: Check if image is non-empty
-                success = cv_image is not None and cv_image.size > 0
+                if self.model.template_update(cv_image):
+                    # Dummy processing: Check if image is non-empty
+                    success = cv_image is not None and cv_image.size > 0
+                    rospy.loginfo("Service request processed, success: %s", success)
+                    self.enabled = True
+                else:
+                    success = False
+                    
                 rospy.loginfo("Service request processed, success: %s", success)
-                self.enabled = True
-                # Dummy processing: Check if image is non-empty
-                success = cv_image is not None and cv_image.size > 0
-                rospy.loginfo("Service request processed, success: %s", success)
-
                 return SetPersonTemplateResponse(success)
             except Exception as e:
                 rospy.logerr("Service processing failed: %s", str(e))
