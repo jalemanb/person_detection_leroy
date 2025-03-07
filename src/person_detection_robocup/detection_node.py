@@ -100,7 +100,7 @@ class CameraProcessingNode:
     def callback(self, image, depth, camera_info):
         """Callback when all topics are received"""
 
-        rospy.logdebug("Received synchronized image and depth.")
+        rospy.loginfo_throttle(5.0, "Received synchronized image and depth.")
 
         if not self.enabled:
             return
@@ -276,7 +276,7 @@ class CameraProcessingNode:
                     self.enabled = True
                 else:
                     success = False
-                    
+
                 rospy.loginfo("Service request processed, success: %s", success)
                 return SetPersonTemplateResponse(success)
             except Exception as e:
