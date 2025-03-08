@@ -231,6 +231,8 @@ class CameraProcessingNode:
             person.position.y = pose[1]
             person.position.z = pose[2]
             person.reliability = 1
+            person.tagnames.append("uuid")
+            person.tags.append("tracked")
             people_msg.people.append(person)
 
         self.people_pub.publish(people_msg)
