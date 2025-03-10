@@ -17,9 +17,12 @@ import cv2
 import os, time
 import torch
 from person_detection_robocup.submodules.SOD import SOD
+from person_detection_robocup.cfg import TrackerConfig
 import rospkg
 import threading
 from people_msgs.msg import People, Person
+
+from dynamic_reconfigure.server import Server
 
 
 class CameraProcessingNode:
@@ -59,6 +62,8 @@ class CameraProcessingNode:
         self.model.to(device)
         rospy.loginfo("Deep Learning Model Armed")
 
+        self.reconf_srv = Server(TrackerConfig, self._reconfigure)
+
         # Initialize the template
         # template_img_path = os.path.join(package_path, 'templates', 'temp_template.png')
         # self.template_img = cv2.imread(template_img_path)
@@ -96,6 +101,12 @@ class CameraProcessingNode:
         self.srv_enable = rospy.Service("~enable", SetBool, self.enable)
 
         rospy.loginfo("Camera Processing Node Ready")
+
+    def _reconfigure(self, config, level):
+        rospy.loginfo(msg=f"Reconfigured {config}")
+        self.config = config
+        self.model.iknn_threshold = config.iknn_threshold
+        return config
 
     def callback(self, image, depth, camera_info):
         """Callback when all topics are received"""
