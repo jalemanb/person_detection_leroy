@@ -106,6 +106,9 @@ class CameraProcessingNode:
         rospy.loginfo(msg=f"Reconfigured {config}")
         self.config = config
         self.model.iknn_threshold = config.iknn_threshold
+        self.enable_debug = config.publish_detection_image
+        self.enable_people = config.publish_people
+        self.enable_poses = config.publish_pose
         return config
 
     def callback(self, image, depth, camera_info):
