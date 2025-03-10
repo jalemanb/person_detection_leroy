@@ -439,7 +439,7 @@ class SOD:
                 similarity = appearance_dist.tolist()
 
                 classification = self.iknn(
-                    detections_features[0], detections_features[1], threshold=0.9
+                    detections_features[0], detections_features[1], threshold=0.8
                 )
                 self.logger.debug(f"self.is_tracking:  {self.is_tracking}")
                 if self.is_tracking:
