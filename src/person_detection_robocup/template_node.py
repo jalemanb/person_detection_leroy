@@ -28,6 +28,7 @@ def call_template_image_service():
         package_path = rospack.get_path("person_detection_robocup")
 
         # Construct the image path
+        # template_img_path = os.path.join(package_path, "templates", "dude3.png")
         template_img_path = os.path.join(package_path, "templates", "letemplate.png")
 
         # Load the image using OpenCV

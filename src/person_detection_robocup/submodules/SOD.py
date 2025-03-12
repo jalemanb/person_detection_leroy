@@ -73,7 +73,10 @@ class SOD:
         self.cov_kf = None
         self.border_thr = 10
 
-        self.reid_thr = 0.8
+        self.reid_thr = 0.9
+
+        self.bk_num = 25
+        self.use_bk_alpha = 0.25
 
         # Incremental KNN Utils #########################
         self.max_samples = 100
@@ -87,9 +90,9 @@ class SOD:
         self.gallery_labels_neg = torch.zeros((self.max_samples)).to(torch.bool).cuda()
         self.samples_num_neg = 0
 
-        self.gallery_feats_bk = torch.zeros((self.max_samples // 2, 6, 512)).cuda()
-        self.gallery_vis_bk = torch.zeros((self.max_samples // 2, 6)).to(torch.bool).cuda()
-        self.gallery_labels_bk = torch.zeros((self.max_samples // 2)).to(torch.bool).cuda()
+        self.gallery_feats_bk = torch.zeros((self.max_samples, 6, 512)).cuda()
+        self.gallery_vis_bk = torch.zeros((self.max_samples, 6)).to(torch.bool).cuda()
+        self.gallery_labels_bk = torch.zeros((self.max_samples)).to(torch.bool).cuda()
         self.bk_ready = False
         #################################################
 
@@ -117,11 +120,10 @@ class SOD:
         self.memory_manager(feats_pos, vis_pos, label_pos, True)
 
         # Once half of the memory bucket for positive feature templates is full, use them for future recovery
-        if self.samples_num_pos > self.max_samples // 2 and (self.bk_ready != True):
-            print("Storing Templates")
-            self.gallery_feats_bk = self.gallery_feats_pos[:self.max_samples // 2].clone()
-            self.gallery_vis_bk = self.gallery_vis_pos[:self.max_samples // 2].clone()
-            self.gallery_labels_bk = self.gallery_labels_pos[:self.max_samples // 2].clone()
+        if self.samples_num_pos == self.max_samples and (self.bk_ready != True):
+            self.gallery_feats_bk = self.gallery_feats_pos.clone()
+            self.gallery_vis_bk = self.gallery_vis_pos.clone()
+            self.gallery_labels_bk = self.gallery_labels_pos.clone()
             self.bk_ready = True
 
         if has_negative:
@@ -250,13 +252,15 @@ class SOD:
             binary_mask (torch.Tensor): Binary mask of shape [k, batch, 6] indicating which top-k distances are within threshold
         """
 
+        alpha = np.random.rand()
+
         # Once a set of good initialization template features are ready, they will be used for reidentification in case of future failure
         # they represet valid and true features for target recovery and future reid
-        if  self.bk_ready == True:
-            shuffling_idxs = torch.randperm(self.samples_num_pos)[:self.gallery_feats_bk.shape[0]]
-            self.gallery_feats_pos[shuffling_idxs] = self.gallery_feats_bk.clone()
-            self.gallery_vis_pos[shuffling_idxs] = self.gallery_vis_bk.clone()
-            self.gallery_labels_pos[shuffling_idxs] = self.gallery_labels_bk.clone()
+        if  self.bk_ready == True and alpha < self.use_bk_alpha:
+            shuffling_idxs = torch.randperm(self.samples_num_pos)[:self.bk_num]
+            self.gallery_feats_pos[shuffling_idxs] = self.gallery_feats_bk[shuffling_idxs].clone()
+            self.gallery_vis_pos[shuffling_idxs] = self.gallery_vis_bk[shuffling_idxs].clone()
+            self.gallery_labels_pos[shuffling_idxs] = self.gallery_labels_bk[shuffling_idxs].clone()
 
         A = torch.cat(
             [
