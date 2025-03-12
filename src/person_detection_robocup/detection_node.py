@@ -3,7 +3,7 @@ import traceback
 
 import rospy
 import message_filters
-from sensor_msgs.msg import Image, CameraInfo
+from sensor_msgs.msg import Image, CompressedImage, CameraInfo
 from geometry_msgs.msg import Pose, PoseArray
 from cv_bridge import CvBridge
 from clf_person_recognition_msgs.srv import (
@@ -77,8 +77,8 @@ class CameraProcessingNode:
         rospy.loginfo("Warmup Inference Executed")
 
         # Subscribing to topics
-        image_sub = message_filters.Subscriber("~image", Image)
-        depth_sub = message_filters.Subscriber("~depth", Image)
+        image_sub = message_filters.Subscriber("~image", CompressedImage)
+        depth_sub = message_filters.Subscriber("~depth", CompressedImage)
         info_sub = message_filters.Subscriber("~camera_info", CameraInfo)
 
         self.cv_bridge = CvBridge()
@@ -92,7 +92,7 @@ class CameraProcessingNode:
         self.people_pub = rospy.Publisher("~people", People, queue_size=10)
 
         # Publisher for debug img
-        self.debug_image_pub = rospy.Publisher("~debug_img", Image, queue_size=10)
+        self.debug_image_pub = rospy.Publisher("~debug_img", CompressedImage, queue_size=10)
 
         # Service to process images
         self.service = rospy.Service(
@@ -122,8 +122,8 @@ class CameraProcessingNode:
 
         with self.lock:
             try:
-                cv_rgb = self.cv_bridge.imgmsg_to_cv2(image, "bgr8")
-                cv_depth = self.cv_bridge.imgmsg_to_cv2(
+                cv_rgb = self.cv_bridge.compressed_imgmsg_to_cv2(image, "bgr8")
+                cv_depth = self.cv_bridge.compressed_imgmsg_to_cv2(
                     depth, "passthrough"
                 )  # Assuming depth is float32
 
@@ -228,7 +228,7 @@ class CameraProcessingNode:
                     cv2.circle(rgb_img, (u, v), radius_kpts, color_kpts, thickness)
 
         self.debug_image_pub.publish(
-            self.cv_bridge.cv2_to_imgmsg(rgb_img, encoding="bgr8")
+            self.cv_bridge.cv2_to_compressed_imgmsg(rgb_img, encoding="bgr8")
         )
 
     def publish_people(self, poses, tracked_ids, header):
