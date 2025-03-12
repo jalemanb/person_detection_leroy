@@ -17,9 +17,12 @@ import cv2
 import os, time
 import torch
 from person_detection_robocup.submodules.SOD import SOD
+from person_detection_robocup.cfg import TrackerConfig
 import rospkg
 import threading
 from people_msgs.msg import People, Person
+
+from dynamic_reconfigure.server import Server
 
 
 class CameraProcessingNode:
@@ -59,6 +62,8 @@ class CameraProcessingNode:
         self.model.to(device)
         rospy.loginfo("Deep Learning Model Armed")
 
+        self.reconf_srv = Server(TrackerConfig, self._reconfigure)
+
         # Initialize the template
         # template_img_path = os.path.join(package_path, 'templates', 'temp_template.png')
         # self.template_img = cv2.imread(template_img_path)
@@ -97,10 +102,18 @@ class CameraProcessingNode:
 
         rospy.loginfo("Camera Processing Node Ready")
 
+    def _reconfigure(self, config, level):
+        rospy.loginfo(msg=f"Reconfigured {config}")
+        self.config = config
+        self.model.iknn_threshold = config.iknn_threshold
+        self.enable_debug = config.publish_detection_image
+        self.enable_people = config.publish_people
+        self.enable_poses = config.publish_pose
+        return config
+
     def callback(self, image, depth, camera_info):
         """Callback when all topics are received"""
-
-        rospy.logdebug("Received synchronized image and depth.")
+        rospy.loginfo_throttle(5.0, "Received synchronized image and depth.")
 
         if not self.enabled:
             return
@@ -231,6 +244,9 @@ class CameraProcessingNode:
             person.position.x = pose[0]
             person.position.y = pose[1]
             person.position.z = pose[2]
+            person.reliability = 1
+            person.tagnames.append("uuid")
+            person.tags.append("tracked")
             people_msg.people.append(person)
 
         self.people_pub.publish(people_msg)
@@ -269,16 +285,15 @@ class CameraProcessingNode:
             try:
                 cv_image = self.cv_bridge.imgmsg_to_cv2(req.image, "bgr8")
 
-                self.model.template_update(cv_image)
+                if self.model.template_update(cv_image):
+                    # Dummy processing: Check if image is non-empty
+                    success = cv_image is not None and cv_image.size > 0
+                    rospy.loginfo("Service request processed, success: %s", success)
+                    self.enabled = True
+                else:
+                    success = False
 
-                # Dummy processing: Check if image is non-empty
-                success = cv_image is not None and cv_image.size > 0
                 rospy.loginfo("Service request processed, success: %s", success)
-                self.enabled = True
-                # Dummy processing: Check if image is non-empty
-                success = cv_image is not None and cv_image.size > 0
-                rospy.loginfo("Service request processed, success: %s", success)
-
                 return SetPersonTemplateResponse(success)
             except Exception as e:
                 rospy.logerr("Service processing failed: %s", str(e))

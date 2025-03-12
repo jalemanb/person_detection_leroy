@@ -258,15 +258,6 @@ class SOD:
             self.gallery_vis_pos[shuffling_idxs] = self.gallery_vis_bk.clone()
             self.gallery_labels_pos[shuffling_idxs] = self.gallery_labels_bk.clone()
 
-            # print("Shuffling features hurra:", shuffling_idxs.shape)
-            # print("self.gallery_feats_bk.shape", self.gallery_feats_bk.shape)
-            # print("self.gallery_vis_bk.shape", self.gallery_vis_bk.shape)
-            # print("self.gallery_labels_bk.shape", self.gallery_labels_bk.shape)
-
-            # print("self.gallery_feats_pos.shape", self.gallery_feats_pos.shape)
-            # print("self.gallery_vis_pos.shape", self.gallery_vis_pos.shape)
-            # print("self.gallery_labels_pos.shape", self.gallery_labels_pos.shape)
-
         A = torch.cat(
             [
                 self.gallery_feats_pos[: self.samples_num_pos],

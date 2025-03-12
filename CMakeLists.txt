@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.0.2)
 project(person_detection_robocup)
 
 find_package(catkin REQUIRED COMPONENTS
+  dynamic_reconfigure
   cv_bridge
   geometry_msgs
   message_filters
@@ -14,24 +15,13 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_python_setup()
 
+## Gencfg
+generate_dynamic_reconfigure_options(
+  cfg/Tracker.cfg
+)
+
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES person_detection_robocup
-#  CATKIN_DEPENDS cv_bridge geometry_msgs message_filters rospy sensor_msgs std_msgs
-#  DEPENDS system_lib
 )
-
-###########
-## Build ##
-###########
-
-## Specify additional locations of header files
-## Your package locations should be listed before other locations
-include_directories(
-# include
-  ${catkin_INCLUDE_DIRS}
-)
-
 #############
 ## Install ##
 #############
