@@ -84,7 +84,7 @@ class CameraProcessingNode:
         self.cv_bridge = CvBridge()
 
         # Synchronize topics
-        ts = message_filters.TimeSynchronizer([image_sub, depth_sub, info_sub], 10)
+        ts = message_filters.TimeSynchronizer([image_sub, depth_sub, info_sub], 1)
         ts.registerCallback(self.callback)
 
         # Publisher for PoseArray
