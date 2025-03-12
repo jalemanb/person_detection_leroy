@@ -86,6 +86,11 @@ class SOD:
         self.gallery_vis_neg = torch.zeros((self.max_samples, 6)).to(torch.bool).cuda()
         self.gallery_labels_neg = torch.zeros((self.max_samples)).to(torch.bool).cuda()
         self.samples_num_neg = 0
+
+        self.gallery_feats_bk = torch.zeros((self.max_samples // 2, 6, 512)).cuda()
+        self.gallery_vis_bk = torch.zeros((self.max_samples // 2, 6)).to(torch.bool).cuda()
+        self.gallery_labels_bk = torch.zeros((self.max_samples // 2)).to(torch.bool).cuda()
+        self.bk_ready = False
         #################################################
 
         self.logger.info("Tracker Armed")
@@ -110,6 +115,14 @@ class SOD:
         has_negative = feats_neg.shape[0] > 0
 
         self.memory_manager(feats_pos, vis_pos, label_pos, True)
+
+        # Once half of the memory bucket for positive feature templates is full, use them for future recovery
+        if self.samples_num_pos > self.max_samples // 2 and (self.bk_ready != True):
+            print("Storing Templates")
+            self.gallery_feats_bk = self.gallery_feats_pos[:self.max_samples // 2].clone()
+            self.gallery_vis_bk = self.gallery_vis_pos[:self.max_samples // 2].clone()
+            self.gallery_labels_bk = self.gallery_labels_pos[:self.max_samples // 2].clone()
+            self.bk_ready = True
 
         if has_negative:
             self.memory_manager(feats_neg, vis_neg, label_neg, False)
@@ -236,6 +249,14 @@ class SOD:
             classification (torch.Tensor): Classification tensor of shape [batch, 6] (boolean values)
             binary_mask (torch.Tensor): Binary mask of shape [k, batch, 6] indicating which top-k distances are within threshold
         """
+
+        # Once a set of good initialization template features are ready, they will be used for reidentification in case of future failure
+        # they represet valid and true features for target recovery and future reid
+        if  self.bk_ready == True:
+            shuffling_idxs = torch.randperm(self.samples_num_pos)[:self.gallery_feats_bk.shape[0]]
+            self.gallery_feats_pos[shuffling_idxs] = self.gallery_feats_bk.clone()
+            self.gallery_vis_pos[shuffling_idxs] = self.gallery_vis_bk.clone()
+            self.gallery_labels_pos[shuffling_idxs] = self.gallery_labels_bk.clone()
 
         A = torch.cat(
             [
@@ -748,6 +769,7 @@ class SOD:
             torch.zeros((self.max_samples)).to(torch.bool).cuda()
         )
         self.samples_num_pos = self.samples_num_neg = 0
+        self.bk_ready = False
 
         # self.logger.debug("len(detections)", len(detections))
 
